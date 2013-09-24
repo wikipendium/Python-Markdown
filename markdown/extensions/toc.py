@@ -107,19 +107,19 @@ class TocTreeprocessor(Treeprocessor):
             header.attrib["class"] = "toctitle"
             header.text = self.config["title"]
 
-        def build_etree_ul(toc_list, parent):
-            ul = etree.SubElement(parent, "ul")
+        def build_etree_ol(toc_list, parent):
+            ol = etree.SubElement(parent, "ol")
             for item in toc_list:
                 # List item link, to be inserted into the toc div
-                li = etree.SubElement(ul, "li")
+                li = etree.SubElement(ol, "li")
                 link = etree.SubElement(li, "a")
                 link.text = item.get('name', '')
                 link.attrib["href"] = '#' + item.get('id', '')
                 if item['children']:
-                    build_etree_ul(item['children'], li)
-            return ul
+                    build_etree_ol(item['children'], li)
+            return ol
         
-        return build_etree_ul(toc_list, div)
+        return build_etree_ol(toc_list, div)
         
     def run(self, doc):
 
