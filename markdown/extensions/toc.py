@@ -13,10 +13,14 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from . import Extension
 from ..treeprocessors import Treeprocessor
+from ..preprocessors import Preprocessor
 from ..util import etree
 from .headerid import slugify, unique, itertext, stashedHTML2text
 import re
 
+# I don't know how to pass messages from preprocessors to treeprocessors,
+# so I use this hacky global instead. TODO: fix this so a global isn't needed.
+hack_global_line_numbers = []
 
 def order_toc_list(toc_list):
     """Given an unsorted list with errors and skips, return a nested one.
@@ -79,6 +83,22 @@ def order_toc_list(toc_list):
     ordered_list, __ = build_correct(toc_list)
     return ordered_list
 
+class TocPreprocessor(Preprocessor):
+
+    def run(self, lines):
+        global hack_global_line_numbers
+        line_numbers = []
+        previous_line = ""
+        for line_number, line in enumerate(lines):
+            line = line.strip()
+            if line and line[0] == '#':
+                line_numbers.append((line, line_number))
+            elif line and len(line) == len(filter(lambda x: x in '-=', line)):
+                line_numbers.append((previous_line, line_number - 1))
+            previous_line = line
+        hack_global_line_numbers = line_numbers
+        return lines
+
 
 class TocTreeprocessor(Treeprocessor):
     
@@ -137,7 +157,8 @@ class TocTreeprocessor(Treeprocessor):
 
         toc_list = []
         marker_found = False
-        for (p, c) in self.iterparent(doc):
+
+        for p, c in self.iterparent(doc):
             text = ''.join(itertext(c)).strip()
             if not text:
                 continue
@@ -166,6 +187,12 @@ class TocTreeprocessor(Treeprocessor):
                 else:
                     elem_id = c.attrib["id"]
 
+                global hack_global_line_numbers
+                for line, line_number in hack_global_line_numbers:
+                    c.attrib["data-source-line-number"] = str(line_number)
+                    hack_global_line_numbers = hack_global_line_numbers[1:]
+                    break
+
                 tag_level = int(c.tag[-1])
                 
                 toc_list.append({'level': tag_level,
@@ -188,6 +215,7 @@ class TocTreeprocessor(Treeprocessor):
 
 class TocExtension(Extension):
     
+    PreProcessorClass = TocPreprocessor
     TreeProcessorClass = TocTreeprocessor
     
     def __init__(self, configs=[]):
@@ -208,14 +236,16 @@ class TocExtension(Extension):
             self.setConfig(key, value)
 
     def extendMarkdown(self, md, md_globals):
-        tocext = self.TreeProcessorClass(md)
-        tocext.config = self.getConfigs()
+        tocexttree = self.TreeProcessorClass(md)
+        tocexttree.config = self.getConfigs()
         # Headerid ext is set to '>prettify'. With this set to '_end',
         # it should always come after headerid ext (and honor ids assinged 
         # by the header id extension) if both are used. Same goes for 
         # attr_list extension. This must come last because we don't want
         # to redefine ids after toc is created. But we do want toc prettified.
-        md.treeprocessors.add("toc", tocext, "_end")
+        md.treeprocessors.add("toc", tocexttree, "_end")
+        tocextpre = self.PreProcessorClass(md)
+        md.preprocessors.add("toc", tocextpre, "_end")
 
 
 def makeExtension(configs={}):
