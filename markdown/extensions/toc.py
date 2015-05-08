@@ -90,7 +90,7 @@ class TocPreprocessor(Preprocessor):
         line_numbers = []
         previous_line = ""
         for line_number, line in enumerate(lines):
-            line = line.strip()
+            line = line.strip('\n')
             if line and line[0] == '#':
                 line_numbers.append((line, line_number))
             elif line and len(line) == len(filter(lambda x: x in '-=', line)):
